@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>高地低酸素順応睡眠・呼吸ガイド</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-white min-h-screen">
+<div class="max-w-4xl mx-auto px-4 py-8">
+  <h1 class="text-2xl font-bold text-center mb-2 text-sky-400">高地低酸素順応睡眠・呼吸ガイド</h1>
+  <p class="text-center text-gray-400 mb-8 text-sm">「高く登り、低く眠る」ルールによる高山病リスク管理</p>
+
+  <!-- Input -->
+  <div class="bg-slate-800 rounded-xl p-6 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div>
+        <label class="block text-sm text-gray-300 mb-2">出発高度 (m)</label>
+        <input id="startAlt" type="number" value="1500" min="0" max="5000" step="100" class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 focus:outline-none focus:border-sky-400">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-300 mb-2">目標高度 (m)</label>
+        <input id="targetAlt" type="number" value="5000" min="500" max="8849" step="100" class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 focus:outline-none focus:border-sky-400">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-300 mb-2">利用可能日数</label>
+        <div class="flex items-center gap-3">
+          <input id="daysRange" type="range" min="3" max="30" value="10" class="flex-1 accent-sky-400">
+          <span id="daysLabel" class="text-sky-400 font-bold w-8">10</span>
+          <span class="text-gray-400 text-sm">日</span>
+        </div>
+      </div>
+    </div>
+    <button onclick="generateSchedule()" class="mt-4 w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 rounded-lg transition">順応スケジュールを生成</button>
+  </div>
+
+  <div id="results" class="hidden">
+    <!-- SpO2 Chart -->
+    <div class="bg-slate-800 rounded-xl p-6 mb-6">
+      <h2 class="text-lg font-bold mb-4 text-gray-200">高度別 SpO2 推定チャート</h2>
+      <svg viewBox="0 0 500 180" class="w-full">
+        <!-- Background zones -->
+        <rect x="50" y="10" width="420" height="45" fill="rgba(239,68,68,0.2)" rx="2"/>
+        <rect x="50" y="55" width="420" height="45" fill="rgba(234,179,8,0.2)" rx="2"/>
+        <rect x="50" y="100" width="420" height="55" fill="rgba(34,197,94,0.2)" rx="2"/>
+        <text x="460" y="38" fill="rgba(239,68,68,0.9)" font-size="9">危険域 &lt;85%</text>
+        <text x="460" y="82" fill="rgba(234,179,8,0.9)" font-size="9">注意域 85-90%</text>
+        <text x="460" y="130" fill="rgba(34,197,94,0.9)" font-size="9">正常域 &gt;90%</text>
+        <!-- Axes -->
+        <line x1="50" y1="155" x2="455" y2="155" stroke="#374151" stroke-width="1"/>
+        <line x1="50" y1="10" x2="50" y2="155" stroke="#374151" stroke-width="1"/>
+        <!-- SpO2 curve -->
+        <polyline points="50,105 100,108 150,113 200,120 250,130 300,142 350,150 400,155 450,160" fill="none" stroke="#38bdf8" stroke-width="2.5"/>
+        <!-- Altitude labels -->
+        <text x="50" y="168" fill="#6b7280" font-size="9" text-anchor="middle">0</text>
+        <text x="150" y="168" fill="#6b7280" font-size="9" text-anchor="middle">2000</text>
+        <text x="250" y="168" fill="#6b7280" font-size="9" text-anchor="middle">4000</text>
+        <text x="350" y="168" fill="#6b7280" font-size="9" text-anchor="middle">6000</text>
+        <text x="450" y="168" fill="#6b7280" font-size="9" text-anchor="middle">8000m</text>
+        <!-- SpO2 Y labels -->
+        <text x="45" y="158" fill="#6b7280" font-size="9" text-anchor="end">70%</text>
+        <text x="45" y="100" fill="#6b7280" font-size="9" text-anchor="end">90%</text>
+        <text x="45" y="55" fill="#6b7280" font-size="9" text-anchor="end">95%</text>
+        <text x="45" y="14" fill="#6b7280" font-size="9" text-anchor="end">99%</text>
+      </svg>
+    </div>
+
+    <!-- Schedule Table -->
+    <div class="bg-slate-800 rounded-xl p-6 mb-6">
+      <h2 class="text-lg font-bold mb-4 text-gray-200">推奨順応スケジュール</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-gray-400 border-b border-slate-700">
+              <th class="text-left py-2 pr-4">日</th>
+              <th class="text-left py-2 pr-4">到達高度</th>
+              <th class="text-left py-2 pr-4">睡眠高度</th>
+              <th class="text-left py-2 pr-4">推定SpO2</th>
+              <th class="text-left py-2">リスク</th>
+            </tr>
+          </thead>
+          <tbody id="scheduleBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- AMS Checklist -->
+    <div class="bg-slate-800 rounded-xl p-6 mb-6">
+      <h2 class="text-lg font-bold mb-4 text-gray-200">高山病 (AMS) チェックリスト — Lake Louise スコア</h2>
+      <p class="text-xs text-gray-400 mb-4">各症状を評価してください（3点以上: 軽度AMS、高度を下げることを推奨）</p>
+      <div id="amsChecklist" class="space-y-3"></div>
+      <div class="mt-4 p-4 rounded-lg bg-slate-700">
+        <div class="flex justify-between items-center">
+          <span class="text-gray-300 font-medium">合計スコア:</span>
+          <span id="amsScore" class="text-2xl font-bold text-sky-400">0 / 15</span>
+        </div>
+        <div id="amsResult" class="mt-2 text-sm"></div>
+      </div>
+    </div>
+
+    <!-- Breathing Guide -->
+    <div class="bg-slate-800 rounded-xl p-6">
+      <h2 class="text-lg font-bold mb-4 text-gray-200">高地呼吸法ガイド</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="p-4 bg-slate-700 rounded-lg">
+          <h3 class="font-bold text-sky-300 mb-2">圧力呼吸法</h3>
+          <p class="text-sm text-gray-300">口をすぼめて力強く息を吐き出す。肺胞を開き、酸素交換を促進。高度4000m以上で特に有効。</p>
+        </div>
+        <div class="p-4 bg-slate-700 rounded-lg">
+          <h3 class="font-bold text-sky-300 mb-2">腹式呼吸</h3>
+          <p class="text-sm text-gray-300">横隔膜を使って深く呼吸。1回換気量を増やし、SpO2を維持。就寝前に10回の深呼吸を推奨。</p>
+        </div>
+        <div class="p-4 bg-slate-700 rounded-lg">
+          <h3 class="font-bold text-sky-300 mb-2">ペース呼吸</h3>
+          <p class="text-sm text-gray-300">歩行リズムに呼吸を合わせる。2歩で吸い、2歩で吐く（低高度）→ 1歩で吸い、1歩で吐く（高高度）。</p>
+        </div>
+        <div class="p-4 bg-slate-700 rounded-lg">
+          <h3 class="font-bold text-sky-300 mb-2">水分補給</h3>
+          <p class="text-sm text-gray-300">高地では1日3-4L以上の水分補給が必要。アルコール・利尿剤は避ける。尿の色で水分状態を確認。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function escapeHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+document.getElementById('daysRange').addEventListener('input', function() {
+  document.getElementById('daysLabel').textContent = this.value;
+});
+
+function estimateSpO2(alt) {
+  if (alt <= 1500) return 98;
+  if (alt <= 2500) return 95;
+  if (alt <= 3500) return 92;
+  if (alt <= 4000) return 89;
+  if (alt <= 4500) return 86;
+  if (alt <= 5000) return 83;
+  if (alt <= 5500) return 80;
+  if (alt <= 6000) return 76;
+  if (alt <= 7000) return 70;
+  return 65;
+}
+
+function getRiskLevel(sleepAlt) {
+  if (sleepAlt < 3000) return { text: '低', cls: 'text-green-400 bg-green-900/40 border-green-700' };
+  if (sleepAlt < 4000) return { text: '中', cls: 'text-yellow-400 bg-yellow-900/40 border-yellow-700' };
+  if (sleepAlt < 5000) return { text: '高', cls: 'text-orange-400 bg-orange-900/40 border-orange-700' };
+  return { text: '極高', cls: 'text-red-400 bg-red-900/40 border-red-700' };
+}
+
+function generateSchedule() {
+  const start = parseInt(document.getElementById('startAlt').value) || 1500;
+  const target = parseInt(document.getElementById('targetAlt').value) || 5000;
+  const days = parseInt(document.getElementById('daysRange').value) || 10;
+
+  const totalGain = target - start;
+  const tbody = document.getElementById('scheduleBody');
+  tbody.innerHTML = '';
+
+  // "Climb high, sleep low" rule: ascend ~300-500m sleep altitude per day above 3000m
+  const schedule = [];
+  let sleepAlt = start;
+  const sleepGainPerDay = totalGain / days;
+
+  for (let d = 1; d <= days; d++) {
+    const targetDay = Math.min(start + (totalGain * d / days), target);
+    const climbAlt = Math.min(targetDay + 300, target);
+    sleepAlt = Math.round(start + (totalGain * d / days));
+
+    // Rest days every 3rd day above 3000m
+    const isRestDay = sleepAlt > 3000 && d % 3 === 0;
+    const displaySleepAlt = isRestDay ? Math.max(sleepAlt - 500, start) : sleepAlt;
+    const displayClimbAlt = isRestDay ? sleepAlt : climbAlt;
+
+    schedule.push({ day: d, climb: Math.round(displayClimbAlt), sleep: Math.round(displaySleepAlt), rest: isRestDay });
+  }
+
+  schedule.forEach(s => {
+    const spO2 = estimateSpO2(s.sleep);
+    const risk = getRiskLevel(s.sleep);
+    const tr = document.createElement('tr');
+    tr.className = 'border-b border-slate-700/50';
+    tr.innerHTML = `
+      <td class="py-2 pr-4 text-gray-300">${escapeHtml(String(s.day))}日目${s.rest ? ' <span class="text-xs text-blue-400">(休息)</span>' : ''}</td>
+      <td class="py-2 pr-4 text-sky-300 font-mono">${escapeHtml(String(s.climb))} m</td>
+      <td class="py-2 pr-4 text-green-300 font-mono">${escapeHtml(String(s.sleep))} m</td>
+      <td class="py-2 pr-4 font-mono ${spO2 < 85 ? 'text-red-400' : spO2 < 90 ? 'text-yellow-400' : 'text-green-400'}">${escapeHtml(String(spO2))}%</td>
+      <td class="py-2"><span class="px-2 py-0.5 rounded border text-xs ${risk.cls}">${escapeHtml(risk.text)}</span></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  setupAmsChecklist();
+  document.getElementById('results').classList.remove('hidden');
+}
+
+const amsItems = [
+  { name: '頭痛', options: ['なし (0)', '軽度 (1)', '中等度 (2)', '重度/衰弱 (3)'] },
+  { name: '消化器症状（吐き気・嘔吐）', options: ['なし (0)', '軽度吐き気 (1)', '中等度吐き気/嘔吐 (2)', '重度嘔吐 (3)'] },
+  { name: '倦怠感・脱力感', options: ['なし (0)', '軽度 (1)', '中等度 (2)', '重度/衰弱 (3)'] },
+  { name: 'めまい・ふらつき', options: ['なし (0)', '軽度 (1)', '中等度 (2)', '重度 (3)'] },
+  { name: '睡眠障害', options: ['なし (0)', '普通より少し悪い (1)', '何度も目が覚めた (2)', ほぼ眠れなかった (3)'] },
+];
+
+// Fix syntax issue
+const amsItems2 = [
+  { name: '頭痛', options: ['なし (0)', '軽度 (1)', '中等度 (2)', '重度/衰弱 (3)'] },
+  { name: '消化器症状（吐き気・嘔吐）', options: ['なし (0)', '軽度吐き気 (1)', '中等度吐き気/嘔吐 (2)', '重度嘔吐 (3)'] },
+  { name: '倦怠感・脱力感', options: ['なし (0)', '軽度 (1)', '中等度 (2)', '重度/衰弱 (3)'] },
+  { name: 'めまい・ふらつき', options: ['なし (0)', '軽度 (1)', '中等度 (2)', '重度 (3)'] },
+  { name: '睡眠障害', options: ['なし (0)', '普通より少し悪い (1)', '何度も目が覚めた (2)', 'ほぼ眠れなかった (3)'] },
+];
+
+function setupAmsChecklist() {
+  const container = document.getElementById('amsChecklist');
+  container.innerHTML = '';
+  amsItems2.forEach((item, i) => {
+    const div = document.createElement('div');
+    div.className = 'flex flex-col md:flex-row md:items-center gap-2';
+    const label = document.createElement('div');
+    label.className = 'text-sm text-gray-300 md:w-48 flex-shrink-0';
+    label.textContent = item.name;
+    const selDiv = document.createElement('div');
+    selDiv.className = 'flex gap-2 flex-wrap';
+    item.options.forEach((opt, v) => {
+      const btn = document.createElement('button');
+      btn.className = 'px-3 py-1 text-xs rounded border border-slate-600 text-gray-400 hover:border-sky-500 ams-btn';
+      btn.textContent = opt;
+      btn.dataset.group = i;
+      btn.dataset.val = v;
+      btn.addEventListener('click', function() {
+        document.querySelectorAll(`.ams-btn[data-group="${i}"]`).forEach(b => {
+          b.classList.remove('bg-sky-600', 'border-sky-400', 'text-white');
+          b.classList.add('border-slate-600', 'text-gray-400');
+        });
+        this.classList.add('bg-sky-600', 'border-sky-400', 'text-white');
+        this.classList.remove('border-slate-600', 'text-gray-400');
+        updateAmsScore();
+      });
+      selDiv.appendChild(btn);
+    });
+    div.appendChild(label);
+    div.appendChild(selDiv);
+    container.appendChild(div);
+  });
+}
+
+function updateAmsScore() {
+  let total = 0;
+  for (let i = 0; i < 5; i++) {
+    const sel = document.querySelector(`.ams-btn[data-group="${i}"].bg-sky-600`);
+    if (sel) total += parseInt(sel.dataset.val);
+  }
+  document.getElementById('amsScore').textContent = `${total} / 15`;
+  const res = document.getElementById('amsResult');
+  if (total === 0) {
+    res.textContent = '症状なし — 順調に順応が進んでいます。';
+    res.className = 'mt-2 text-sm text-green-400';
+  } else if (total <= 2) {
+    res.textContent = '軽微な症状 — 様子を見ながら継続可能。水分補給を増やしてください。';
+    res.className = 'mt-2 text-sm text-yellow-400';
+  } else if (total <= 5) {
+    res.textContent = '⚠ 軽度AMS — 高度上昇を停止。症状が改善するまで休息してください。';
+    res.className = 'mt-2 text-sm text-orange-400';
+  } else if (total <= 10) {
+    res.textContent = '⛔ 中等度AMS — 500〜1000m下降が必要です。医療対応を検討してください。';
+    res.className = 'mt-2 text-sm text-red-400';
+  } else {
+    res.textContent = '🚨 重度AMS/HACE/HAPEの疑い — 即座に下山し、緊急医療対応が必要です！';
+    res.className = 'mt-2 text-sm text-red-400 font-bold';
+  }
+}
+
+generateSchedule();
+</script>
+</body>
+</html>
